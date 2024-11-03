@@ -1,3 +1,65 @@
+<script>
+import serverTodos from './data/todos.js'
+import StatusFilter from './StatusFilter.vue'
+import TodoItem from './TodoItem.vue'
+export default {
+  components: {
+    StatusFilter,
+    TodoItem,
+  },
+  data() {
+    const todos = JSON.parse(localStorage.getItem('todos')) || serverTodos;
+    console.log('todos', todos);
+
+    return {
+      todos,
+      title: '',
+      status: 'all',
+    }
+  },
+  watch: {
+    todos: {
+      deep: true,
+      handler() {
+        localStorage.setItem('todos', JSON.stringify(this.todos))
+      },
+    },
+  },
+  computed: {
+    activeTodos() {
+      return this.todos.filter(({ completed }) => !completed)
+    },
+    completedTodos() {
+      return this.todos.filter(({ completed }) => completed)
+    },
+    visibleTodos() {
+      switch (this.status) {
+        case 'active':
+          return this.activeTodos;
+        case 'completed':
+          return this.completedTodos;
+        default:
+          return this.todos;
+      }
+    },
+  },
+  methods: {
+    handleSubmit() {
+      this.todos.push({
+        id: Date.now(),
+        title: this.title,
+        completed: false,
+      })
+    },
+    filterTodos(currentFilter) {
+      this.todos = this.todos.filter(
+        ({ completed }) => completed === currentFilter,
+      )
+    },
+  },
+}
+</script>
+
 <template>
   <div class="todoapp">
     <h1 class="todoapp__title">todos</h1>
@@ -7,101 +69,58 @@
         <button
           type="button"
           class="todoapp__toggle-all"
-          data-cy="ToggleAllButton"
-          onClick="{onHandleToggleAllTodos}"
+          :class="{ active: !activeTodos.length && !!completedTodos.length }"
         ></button>
 
-        <form>
+        <form @submit.prevent="handleSubmit">
           <input
-            data-cy="NewTodoField"
             type="text"
             class="todoapp__new-todo"
             placeholder="What needs to be done?"
-            ref="{inputRef}"
-            disabled="{isSubmiting}"
-            onKeyDown="{onHandleAddingTodo}"
-            onChange="{handleInputOnChange}"
-            value="{value}"
+            v-model="title"
           />
         </form>
       </header>
 
-      <section class="todoapp__main" data-cy="TodoList">
-        <div data-cy="Todo" class="todo">
-          <label class="todo__status-label">
-            <input
-              data-cy="TodoStatus"
-              type="checkbox"
-              class="todo__status"
-              onChange="{handleTodoChecked}"
-              checked="{todo.completed}"
-            />
-          </label>
+      <TransitionGroup name="list" tag="section" class="todoapp__main">
+        <TodoItem
+          v-for="todo of visibleTodos"
+          :key="todo.id"
+          :todo="todo"
+          @update="Object.assign(todo, $event)"
+          @delete="todos.splice(todos.indexOf(todo), 1)"
+        />
+      </TransitionGroup>
 
-          <form onSubmit="{handleSubmitTodo}">
-            <input
-              data-cy="TodoTitleField"
-              type="text"
-              class="todo__title-field"
-              placeholder="Empty todo will be deleted"
-              value="{editTodoValue}"
-              onBlur="{handleBlurTodo}"
-              onKeyUp="{handleEscapeEdit}"
-              ref="{titleInput}"
-            />
-          </form>
-          <div data-cy="TodoLoader" class="modal overlay">
-            <div class="modal-background has-background-white-ter" />
-            <div class="loader" ></div>
-          </div>
-        </div>
-      </section>
+      <footer class="todoapp__footer">
+        <span class="todo-count"> {{ activeTodos.length }} items left </span>
 
-      <footer class="todoapp__footer" data-cy="Footer">
-        <span class="todo-count" data-cy="TodosCounter">
-          {activeListLength} items left
-        </span>
-
-        <nav class="filter" data-cy="Filter">
-          <a
-            key="{filterKey}"
-            href="#/"
-            class="filter__link"
-            data-cy="{filterDataAtributes[filterValue]}"
-            onClick="{handleFilter}"
-          >
-            All
-          </a>
-          <a
-            key="{filterKey}"
-            href="#/"
-            class="filter__link"
-            data-cy="{filterDataAtributes[filterValue]}"
-            onClick="{handleFilter}"
-          >
-            Active
-          </a>
-          <a
-            key="{filterKey}"
-            href="#/"
-            class="filter__link"
-            data-cy="{filterDataAtributes[filterValue]}"
-            onClick="{handleFilter}"
-          >
-            Completed
-          </a>
-        </nav>
+        <StatusFilter v-model:value="status" />
 
         <button
           type="button"
           class="todoapp__clear-completed"
-          data-cy="ClearCompletedButton"
-          onClick="{handleDeleteComplitedTodo}"
+          v-if="completedTodos.length > 0"
         >
           Clear completed
         </button>
       </footer>
     </div>
-    <ErrorNotification error="{error}" onHandleHideError="{handleHideError}" />
   </div>
 </template>
+
+<style>
+.list-enter-active,
+.list-leave-active {
+  height: 60px;
+  transition: all 1s ease;
+}
+
+.list-enter-from,
+.list-leave-to{
+  height: 0;
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: top;
+}
+</style>
