@@ -1,29 +1,21 @@
 <script>
-import serverTodos from './data/todos.js'
-import StatusFilter from './StatusFilter.vue'
-import TodoItem from './TodoItem.vue'
+import { createTodo, deleteTodo, getTodos, updateTodo } from './API/todos.js'
+import ErrorMessage from './components/MessageBlock.vue';
+import StatusFilter from './components/StatusFilter.vue'
+import TodoItem from './components/TodoItem.vue'
 export default {
   components: {
     StatusFilter,
     TodoItem,
+    ErrorMessage,
   },
   data() {
-    const todos = JSON.parse(localStorage.getItem('todos')) || serverTodos;
-    console.log('todos', todos);
-
     return {
-      todos,
+      todos: [],
       title: '',
       status: 'all',
+      errorMessage: '',
     }
-  },
-  watch: {
-    todos: {
-      deep: true,
-      handler() {
-        localStorage.setItem('todos', JSON.stringify(this.todos))
-      },
-    },
   },
   computed: {
     activeTodos() {
@@ -42,20 +34,55 @@ export default {
           return this.todos;
       }
     },
+    isActiveToggleBtn() {
+      return !this.activeTodos.length && !!this.completedTodos.length
+    }
+  },
+  mounted() {
+    getTodos()
+      .then(({ data }) => {
+        this.todos = data;
+        console.log('everything is fine');
+      })
+      .catch(() => {
+        console.log('error')
+        this.errorMessage = 'Unable load todos';
+      })
   },
   methods: {
     handleSubmit() {
-      this.todos.push({
-        id: Date.now(),
-        title: this.title,
-        completed: false,
+      createTodo(this.title).then(({ data }) => {
+        this.todos.push(data);
+        this.title = '';
       })
     },
-    filterTodos(currentFilter) {
-      this.todos = this.todos.filter(
-        ({ completed }) => completed === currentFilter,
-      )
+    updateTodo({id, title, completed }) {
+      updateTodo({ id, title, completed }).then(({ data }) => {
+        this.todos = this.todos.map((todo) => todo.id !== id? todo : data )
+      })
     },
+    deleteTodo(todoId) {
+      deleteTodo(todoId).then(() => {
+        this.todos = this.todos.filter(({id}) => id !== todoId)
+      })
+    },
+    clearCompleted() {
+      const completedIds = this.completedTodos.map(todo => this.deleteTodo(todo.id));
+      Promise.all(completedIds)
+        .then(() => this.todos = this.activeTodos)
+        .catch(() => this.errorMessage = "Unable delete completed todos");
+    },
+    toggleCompleted() {
+      if (!this.completedTodos.length) {
+        return;
+      }
+      const updatedTodos = this.completedTodos.map(todo => ({ ...todo, completed: !todo.completed }));
+      console.log('updatedTodos', updatedTodos);
+      const promisesMap = updatedTodos.map(todo => this.updateTodo(todo));
+      Promise.all(promisesMap)
+        .then(() => this.todos = updatedTodos)
+        .catch(() => this.errorMessage = 'Unable to change status')
+    }
   },
 }
 </script>
@@ -69,7 +96,9 @@ export default {
         <button
           type="button"
           class="todoapp__toggle-all"
-          :class="{ active: !activeTodos.length && !!completedTodos.length }"
+          :class="{ active: isActiveToggleBtn }"
+          @click="toggleCompleted"
+          :disabled="!isActiveToggleBtn"
         ></button>
 
         <form @submit.prevent="handleSubmit">
@@ -87,8 +116,8 @@ export default {
           v-for="todo of visibleTodos"
           :key="todo.id"
           :todo="todo"
-          @update="Object.assign(todo, $event)"
-          @delete="todos.splice(todos.indexOf(todo), 1)"
+          @update="updateTodo"
+          @delete="deleteTodo(todo.id)"
         />
       </TransitionGroup>
 
@@ -101,26 +130,38 @@ export default {
           type="button"
           class="todoapp__clear-completed"
           v-if="completedTodos.length > 0"
+          v-on:click="clearCompleted"
         >
           Clear completed
         </button>
       </footer>
     </div>
+
+    <ErrorMessage
+      class="is-danger"
+      :active="errorMessage !== ''"
+      @hide="errorMessage = ''"
+    >
+      <p>{{ errorMessage }}</p>
+      <template #header><p>Error</p></template>
+    </ErrorMessage>
   </div>
 </template>
 
 <style>
 .list-enter-active,
 .list-leave-active {
-  height: 60px;
-  transition: all 1s ease;
+  transform: scaleY(1);
+  height: 58px;
+  transition:
+    opacity 0.5s 0.2s ease-out,
+    height 0.5s ease-out;
 }
 
 .list-enter-from,
-.list-leave-to{
+.list-leave-to {
   height: 0;
   opacity: 0;
   transform: scaleY(0);
-  transform-origin: top;
 }
 </style>
