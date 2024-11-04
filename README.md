@@ -1,4 +1,7 @@
 # Todo App
+
+[DEMO](https://iyehorova.github.io/vue-todo-list/)
+
 A simple Todo application built with Vue 3 and Options API. This app allows users to manage their tasks efficiently by adding, editing, deleting, and filtering todos. All data is stored on the server, enabling seamless integration with a REST API. The app provides several features to enhance user convenience.
 
 ### Features
